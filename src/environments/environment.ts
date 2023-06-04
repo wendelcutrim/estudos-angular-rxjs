@@ -3,7 +3,8 @@
 // The list of file replacements can be found in `angular.json`.
 
 export const environment = {
-  production: false
+    production: false,
+    NG_API_LIVRO_BASE_URL: "https://www.googleapis.com/books/v1/volumes",
 };
 
 /*
