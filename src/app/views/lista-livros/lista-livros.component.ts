@@ -1,6 +1,6 @@
 import { Component } from "@angular/core";
 import { FormControl } from "@angular/forms";
-import { Observable, switchMap, map, tap } from "rxjs";
+import { Observable, switchMap, map, tap, filter, debounceTime, distinctUntilChanged } from "rxjs";
 import { LivroVolumeInfo } from "src/app/models/LivroVolumeInfo";
 import { Item } from "src/app/models/interfaces";
 import { LivroService } from "src/app/service/livro.service";
@@ -11,14 +11,15 @@ import { LivroService } from "src/app/service/livro.service";
     styleUrls: ["./lista-livros.component.css"],
 })
 export class ListaLivrosComponent {
-    //listaLivros: Livro[] = [];
-
     campoBusca: FormControl = new FormControl();
 
-    livrosEncontrados$: Observable<any> = this.campoBusca.valueChanges.pipe(
+    livrosEncontrados$: Observable<LivroVolumeInfo[]> = this.campoBusca.valueChanges.pipe(
+        filter((value) => value.length >= 3),
         tap(() => console.log("Fluxo inicial")),
+        distinctUntilChanged(),
+        debounceTime(300),
         switchMap((value) => this.service.buscar(value)),
-        tap(() => console.log("Requisição ao servidor")),
+        tap((response) => console.log("Requisição ao servidor: ", response)),
         map((data) => this.livrosResultadoParaLivros(data)),
     );
 
