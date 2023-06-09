@@ -1,6 +1,20 @@
-import { Component, OnDestroy } from "@angular/core";
-import { Subscription } from "rxjs";
-import { Livro } from "src/app/models/interfaces";
+import { Component } from "@angular/core";
+import { FormControl } from "@angular/forms";
+import {
+    Observable,
+    switchMap,
+    map,
+    tap,
+    filter,
+    debounceTime,
+    distinctUntilChanged,
+    catchError,
+    throwError,
+    Subscription,
+    of,
+} from "rxjs";
+import { LivroVolumeInfo } from "src/app/models/LivroVolumeInfo";
+import { Item, LivrosResultado } from "src/app/models/interfaces";
 import { LivroService } from "src/app/service/livro.service";
 
 @Component({
@@ -8,47 +22,42 @@ import { LivroService } from "src/app/service/livro.service";
     templateUrl: "./lista-livros.component.html",
     styleUrls: ["./lista-livros.component.css"],
 })
-export class ListaLivrosComponent implements OnDestroy {
-    listaLivros: Livro[] = [];
+export class ListaLivrosComponent {
+    campoBusca: FormControl = new FormControl();
+    mensagemErro: string = "";
+    livrosResultado: LivrosResultado;
 
-    campoBusca: string = "";
-    subscription: Subscription;
-    livro: Livro;
+    totalDeLivros$ = this.campoBusca.valueChanges.pipe(
+        filter((value) => value.length >= 3),
+        tap(() => console.log("Fluxo inicial")),
+        distinctUntilChanged(),
+        debounceTime(300),
+        switchMap((value) => this.service.buscar(value)),
+        map((data) => (this.livrosResultado = data)),
+        catchError((err) => {
+            console.error(err);
+            return of();
+        }),
+    );
+
+    livrosEncontrados$: Observable<LivroVolumeInfo[]> = this.campoBusca.valueChanges.pipe(
+        filter((value) => value.length >= 3),
+        tap(() => console.log("Fluxo inicial")),
+        distinctUntilChanged(),
+        debounceTime(300),
+        switchMap((value) => this.service.buscar(value)),
+        tap((response) => console.log("Requisição ao servidor: ", response)),
+        map((response) => response.items ?? []),
+        map((data) => this.livrosResultadoParaLivros(data)),
+        catchError((err) => {
+            console.log("[ERROR]: ", err);
+            return throwError(() => new Error((this.mensagemErro = "Ops, ocorreu um erro! Tente novamente mais tarde")));
+        }),
+    );
 
     constructor(private service: LivroService) {}
 
-    buscarLivros(): void {
-        this.subscription = this.service.buscar(this.campoBusca).subscribe({
-            next: (data) => {
-                this.listaLivros = this.livrosResultadoParaLivros(data);
-            },
-            error: (err) => {
-                console.error(`[ERROR]: ${JSON.stringify(err)}`);
-            },
-            complete: () => console.log("[INFO]: A requisição foi realizada com sucesso!"),
-        });
-    }
-
-    livrosResultadoParaLivros(items: any): Livro[] {
-        const livros: Livro[] = [];
-
-        items.forEach((item: any) => {
-            livros.push(
-                (this.livro = {
-                    title: item.volumeInfo?.title,
-                    authors: item.volumeInfo?.authors,
-                    publisher: item.volumeInfo?.publisher,
-                    publishedDate: item.volumeInfo?.publishedDate,
-                    description: item.volumeInfo?.description,
-                    thumbnail: item.volumeInfo?.imageLinks?.thumbnail,
-                }),
-            );
-        });
-
-        return livros;
-    }
-
-    ngOnDestroy(): void {
-        this.subscription.unsubscribe();
+    livrosResultadoParaLivros(items: Item[]): LivroVolumeInfo[] {
+        return items.map((item) => new LivroVolumeInfo(item));
     }
 }
